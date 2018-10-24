@@ -1,35 +1,38 @@
 DELIMITER //
+select '' into @msg//
 DROP FUNCTION IF EXISTS ARC_XORSTR //
 CREATE FUNCTION ARC_XORSTR (s CHAR(128),c SMALLINT) RETURNS CHAR(128) DETERMINISTIC
 BEGIN
-    DECLARE result CHAR(128) DEFAULT "";
+    DECLARE result CHAR(129) DEFAULT "";
     DECLARE i SMALLINT DEFAULT 1;
     DECLARE l SMALLINT DEFAULT 128;
+    SET result = LPAD('',129,'-');
     WHILE (i <= l) DO 
-        SET result = CONCAT(result, CHAR(ASCII(SUBSTRING(s,i,1))^c));
+        SET result = INSERT(result, i, 1, CHAR(ASCII(SUBSTRING(s,i,1))^c));
         SET i = i + 1;  
     END WHILE;
-
-    RETURN result;
+    RETURN SUBSTRING(result,1,128);
 END//
 
 DROP FUNCTION IF EXISTS ARC_XORSTRS //
 CREATE FUNCTION ARC_XORSTRS (s CHAR(64),c CHAR(64)) RETURNS CHAR(64) DETERMINISTIC
 BEGIN
-    DECLARE result CHAR(128) DEFAULT "";
     DECLARE i SMALLINT DEFAULT 1;
     DECLARE l SMALLINT DEFAULT 0;
+    DECLARE chr SMALLINT DEFAULT 0;
+    DECLARE result CHAR(65) DEFAULT "";
+    SET result = LPAD('',65,'-');
     SET l = LENGTH(s);
     IF LENGTH(c) < l THEN
         SET l = LENGTH(c);
     END IF;
-    
+
     WHILE (i <= l) DO 
-        SET result = CONCAT(result, CHAR(ASCII(SUBSTRING(s,i,1)) ^ ASCII(SUBSTRING(c,i,1))));
+        SET chr = ASCII(SUBSTRING(s,i,1)) ^ ASCII(SUBSTRING(c,i,1));
+        SET result = INSERT(result, i, 1, CHAR(chr));
         SET i = i + 1;  
     END WHILE;
-
-    RETURN result;
+    RETURN SUBSTRING(result,1,64);
 END//
 
 DROP FUNCTION IF EXISTS ARC_HMAC_SHA_512 //
