@@ -1,66 +1,64 @@
-
 DELIMITER //
+select '' into @msg//
 DROP FUNCTION IF EXISTS ARC_XORSTR //
-CREATE FUNCTION ARC_XORSTR (s CHAR(64),c SMALLINT) RETURNS CHAR(64) DETERMINISTIC 
+CREATE FUNCTION ARC_XORSTR (s CHAR(128),c SMALLINT) RETURNS CHAR(128) DETERMINISTIC
 BEGIN
-    DECLARE result CHAR(64) DEFAULT "";
+    DECLARE result CHAR(129) DEFAULT "";
     DECLARE i SMALLINT DEFAULT 1;
-    DECLARE l SMALLINT DEFAULT 0;
-    SET l = LENGTH(s);
+    DECLARE l SMALLINT DEFAULT 128;
+    SET result = LPAD('',129,'-');
     WHILE (i <= l) DO 
-        SET result = CONCAT(result, CHAR(ASCII(SUBSTRING(s,i,1))^c));
+        SET result = INSERT(result, i, 1, CHAR(ASCII(SUBSTRING(s,i,1))^c));
         SET i = i + 1;  
     END WHILE;
-
-    RETURN result;
+    RETURN SUBSTRING(result,1,128);
 END//
 
 DROP FUNCTION IF EXISTS ARC_XORSTRS //
-CREATE FUNCTION ARC_XORSTRS (s CHAR(64),c CHAR(64)) RETURNS CHAR(64) DETERMINISTIC 
+CREATE FUNCTION ARC_XORSTRS (s CHAR(64),c CHAR(64)) RETURNS CHAR(64) DETERMINISTIC
 BEGIN
-    DECLARE result CHAR(64) DEFAULT "";
     DECLARE i SMALLINT DEFAULT 1;
     DECLARE l SMALLINT DEFAULT 0;
+    DECLARE chr SMALLINT DEFAULT 0;
+    DECLARE result CHAR(65) DEFAULT "";
+    SET result = LPAD('',65,'-');
     SET l = LENGTH(s);
     IF LENGTH(c) < l THEN
         SET l = LENGTH(c);
     END IF;
-    
+
     WHILE (i <= l) DO 
-        SET result = CONCAT(result, CHAR(ASCII(SUBSTRING(s,i,1)) ^ ASCII(SUBSTRING(c,i,1))));
+        SET chr = ASCII(SUBSTRING(s,i,1)) ^ ASCII(SUBSTRING(c,i,1));
+        SET result = INSERT(result, i, 1, CHAR(chr));
         SET i = i + 1;  
     END WHILE;
-
-    RETURN result;
+    RETURN SUBSTRING(result,1,64);
 END//
 
 DROP FUNCTION IF EXISTS ARC_HMAC_SHA_512 //
-CREATE FUNCTION ARC_HMAC_SHA_512 (‭sk CHAR(64),s CHAR(64)) RETURNS CHAR(64) DETERMINISTIC 
+CREATE FUNCTION ARC_HMAC_SHA_512 (saltkey CHAR(128),passwd CHAR(128)) RETURNS CHAR(64) DETERMINISTIC
 BEGIN
     DECLARE result CHAR(64) DEFAULT "";
-    SET result = UNHEX(SHA2(CONCAT(ARC_XORSTR(‭sk,92),s),512));
-    SET result = UNHEX(SHA2(CONCAT(ARC_XORSTR(‭sk,54),result),512));
+    SET result = UNHEX(SHA2(CONCAT(ARC_XORSTR(passwd,54),saltkey),512));
+    SET result = UNHEX(SHA2(CONCAT(ARC_XORSTR(passwd,92),result),512));
     RETURN result;
 END//
 
 
 DROP FUNCTION IF EXISTS ARC_PBKDF2 //
-CREATE FUNCTION ARC_PBKDF2 (‭saltkey CHAR(64),passwd CHAR(64),l INT) RETURNS CHAR(64) DETERMINISTIC 
+CREATE FUNCTION ARC_PBKDF2 (saltkey CHAR(64),passwd CHAR(64),l INT) RETURNS CHAR(64) DETERMINISTIC
 BEGIN
     DECLARE prevhash CHAR(64) DEFAULT "";
-    DECLARE newhash CHAR(64) DEFAULT "";
-    DECLARE result CHAR(64) DEFAULT "";
+    DECLARE xorhash CHAR(64) DEFAULT "";
     DECLARE i INT DEFAULT 1;
-    
-    SET prevhash = ARC_HMAC_SHA_512(‭saltkey,passwd);
-    SET newhash = ARC_HMAC_SHA_512(prevhash,passwd);
-    SET result = newhash;
+
+    SET xorhash = ARC_HMAC_SHA_512(CONCAT(saltkey,UNHEX("00000001")),passwd);
+    SET prevhash = xorhash;
     WHILE (i < l) DO 
-        SET result = ARC_HMAC_SHA_512(ARC_XORSTRS(prevhash,newhash),passwd);
-        SET prevhash = newhash;
-        SET newhash = result;
+        SET prevhash = ARC_HMAC_SHA_512(prevhash,passwd);
+        SET xorhash = ARC_XORSTRS(xorhash,prevhash);
         SET i = i + 1;  
     END WHILE;
-    RETURN result;
+    RETURN xorhash;
 END//
 DELIMITER ;
